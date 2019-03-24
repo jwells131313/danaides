@@ -3,6 +3,7 @@
 package rate
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -72,6 +73,35 @@ func TestTenTakes(t *testing.T) {
 	assert.Equal(t, uint64(0), took)
 	assert.Equal(t, uint64(0), limiter.GetBucketSize())
 	assert.Equal(t, time.Duration(0), delay)
+}
+
+func TestTwoAndAHalfSeconds(t *testing.T) {
+	limiter := New(100)
+
+	now := time.Now()
+	limiter.Add(250)
+
+	totalTook := 0
+	for {
+		took, delay := limiter.Take()
+
+		if took == 0 && delay == 0 {
+			break
+		}
+
+		if took == 0 {
+			fmt.Printf("JRW(10) sleeping %d milli seconds\n", delay/time.Millisecond)
+			time.Sleep(delay)
+		} else {
+			fmt.Printf("JRW(20) got %d bytes\n", took)
+			totalTook += int(took)
+		}
+	}
+
+	elapsed := time.Now().Sub(now)
+
+	assert.Equal(t, 250, totalTook)
+	assert.True(t, elapsed >= ((2*time.Second)+(500*time.Millisecond)))
 }
 
 type mockClock struct {
