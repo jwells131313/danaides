@@ -20,13 +20,17 @@ type Limiter interface {
 	// Take removes bytes from the limiter in order to attempt to get
 	// as close to the limit as it can.  It returns the number of
 	// elements that can be processed at this time.  Will return 0 if
-	// the bucket is empty.  This method will block until it is safe to
-	// process at least one element unless there is an event on the doneChan
-	Take(doneChan chan interface{}) uint64
+	// the bucket is empty.  If it returns 0 it may return the time the
+	// caller should wait before trying to take more again.  If both
+	// the number and the duration return 0 then the limiter is empty
+	Take() (uint64, time.Duration)
 
 	// Returns the limit this limiter will attempt to achieve in
 	// items per second
-	GetLimit() float64
+	GetLimit() uint64
+
+	// GetBucketSize returns the current size of the bucket
+	GetBucketSize() uint64
 }
 
 // Clock is an interface to be used for testing
@@ -37,24 +41,30 @@ type Clock interface {
 type limiterData struct {
 	lock         sync.Mutex
 	clock        Clock
-	limit        float64
+	limit        uint64
+	limitAsFloat float64
 	boostedLimit float64
 
 	currentBucketSize uint64
 	lastEvent         time.Time
+	replies           *repliesList
 }
 
 // New creates a new Limiter with the given limit
-func New(limit float64) Limiter {
+func New(limit uint64) Limiter {
 	return NewWithClock(limit, &defaultClock{})
 }
 
 // NewWithClock is used for testing with a specialized clock
-func NewWithClock(limit float64, clock Clock) Limiter {
+func NewWithClock(limit uint64, clock Clock) Limiter {
+	limitAsFloat := float64(limit)
+
 	return &limiterData{
 		clock:        clock,
 		limit:        limit,
-		boostedLimit: limit * boostFactor,
+		limitAsFloat: limitAsFloat,
+		boostedLimit: limitAsFloat * boostFactor,
+		replies:      &repliesList{},
 	}
 }
 
@@ -70,18 +80,19 @@ func (ld *limiterData) Add(chunkSize uint64) {
 	}
 }
 
-func (ld *limiterData) Take(doneChan chan interface{}) uint64 {
+func (ld *limiterData) Take() (uint64, time.Duration) {
 	ld.lock.Lock()
 	defer ld.lock.Unlock()
+
+	if ld.currentBucketSize == 0 {
+		// no need to put on replies list and does not count as an event
+		return 0, 0
+	}
 
 	now := ld.clock.Now()
 	defer func() {
 		ld.lastEvent = now
 	}()
-
-	if ld.currentBucketSize == 0 {
-		return 0
-	}
 
 	sinceLastEvent := now.Sub(ld.lastEvent)
 
@@ -89,20 +100,124 @@ func (ld *limiterData) Take(doneChan chan interface{}) uint64 {
 	if sinceLastEvent < time.Second {
 		maxOutput = ld.boostedLimit * (float64(sinceLastEvent) / float64(time.Second))
 	} else {
-		maxOutput = ld.limit
+		maxOutput = ld.limitAsFloat
+	}
+
+	if maxOutput > ld.limitAsFloat {
+		maxOutput = ld.limitAsFloat
 	}
 
 	output := uint64(math.Round(maxOutput))
 	if output > ld.currentBucketSize {
 		output = ld.currentBucketSize
 	}
-	ld.currentBucketSize = ld.currentBucketSize - output
 
-	return output
+	historicalOutput := ld.replies.calculateAndCut(now)
+	if historicalOutput > ld.limit {
+		historicalOutput = ld.limit
+	}
+
+	totalOverOneSecond := historicalOutput + output
+	if totalOverOneSecond > ld.limit {
+		output = ld.limit - historicalOutput
+	}
+
+	// finished calculating the size, safe to remove from
+	ld.currentBucketSize = ld.currentBucketSize - output
+	delay := time.Duration(0)
+	if output > 0 {
+		ld.replies.add(output, now)
+	} else {
+		lastTime := ld.replies.lastTime()
+		if lastTime == nil {
+			delay = time.Second
+		} else {
+			delay = time.Second - now.Sub(*lastTime)
+		}
+
+	}
+
+	return output, delay
 }
 
-func (ld *limiterData) GetLimit() float64 {
+func (ld *limiterData) GetLimit() uint64 {
 	return ld.limit
+}
+
+func (ld *limiterData) GetBucketSize() uint64 {
+	ld.lock.Lock()
+	defer ld.lock.Unlock()
+
+	return ld.currentBucketSize
+}
+
+type repliesList struct {
+	head *repliesEntry
+	tail *repliesEntry
+}
+
+func (rl *repliesList) add(output uint64, now time.Time) {
+	entry := &repliesEntry{
+		reply:   output,
+		replied: now,
+	}
+
+	if rl.head == nil {
+		rl.head = entry
+		rl.tail = entry
+		return
+	}
+
+	entry.next = rl.head
+	rl.head = entry
+}
+
+func (rl *repliesList) lastTime() *time.Time {
+	if rl.tail == nil {
+		return nil
+	}
+
+	return &rl.tail.replied
+}
+
+func (rl *repliesList) calculateAndCut(now time.Time) uint64 {
+	if rl.head == nil {
+		return 0
+	}
+
+	// First, delete a second from now
+	dropTime := now.Add(-time.Second)
+
+	var retVal uint64
+	var previous *repliesEntry
+	for entry := rl.head; entry != nil; entry = entry.next {
+		if entry.replied.After(dropTime) {
+			retVal = retVal + entry.reply
+		} else {
+			// doing the cut, and returning
+			if previous == nil {
+				rl.head = nil
+				rl.tail = nil
+				return retVal
+			}
+
+			previous.next = nil
+			rl.tail = previous
+			return retVal
+		}
+
+		previous = entry
+	}
+
+	// nothing was cut, just return the value
+	return retVal
+}
+
+type repliesEntry struct {
+	reply   uint64
+	replied time.Time
+
+	next *repliesEntry
 }
 
 type defaultClock struct {
