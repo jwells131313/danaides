@@ -75,7 +75,7 @@ func (ld *limiterData) Add(chunkSize uint64) {
 	currentSize := ld.currentBucketSize
 	ld.currentBucketSize = currentSize + chunkSize
 
-	if currentSize == 0 {
+	if currentSize == 0 && ld.replies.cutAndIsEmpty(ld.clock.Now()) {
 		ld.lastEvent = ld.clock.Now()
 	}
 }
@@ -110,6 +110,9 @@ func (ld *limiterData) Take() (uint64, time.Duration) {
 	output := uint64(math.Round(maxOutput))
 	if output > ld.currentBucketSize {
 		output = ld.currentBucketSize
+	} else if output == 0 {
+		// always try to send at least one element
+		output = 1
 	}
 
 	historicalOutput := ld.replies.calculateAndCut(now)
@@ -154,6 +157,16 @@ func (ld *limiterData) GetBucketSize() uint64 {
 type repliesList struct {
 	head *repliesEntry
 	tail *repliesEntry
+}
+
+func (rl *repliesList) cutAndIsEmpty(now time.Time) bool {
+	rl.calculateAndCut(now)
+
+	if rl.head == nil {
+		return true
+	}
+
+	return false
 }
 
 func (rl *repliesList) add(output uint64, now time.Time) {
