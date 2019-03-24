@@ -49,6 +49,7 @@ build:
 
     # golint step
     - golint:
+      exclude: "^vendor"
 
     - script:
       name: turn on modules
