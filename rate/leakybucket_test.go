@@ -156,6 +156,9 @@ func testLowRate(t *testing.T, rate uint64) {
 
 		took, delay := limiter.Take()
 		if delay != 0 {
+			// due to fake clock, we known exactly how much time we took
+			assert.Equal(t, 1*time.Second, delay)
+
 			// faux sleep
 			mc.nextNow = mc.nextNow.Add(delay)
 			continue
