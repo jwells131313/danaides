@@ -1,5 +1,6 @@
 // Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
 
+// A leaky bucket rate limiter for streaming data
 package rate
 
 import (
