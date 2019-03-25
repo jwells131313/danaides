@@ -49,6 +49,7 @@ func TestTenTakes(t *testing.T) {
 
 	// primes the pump by immediately taking the values back, does not increment clock
 	assert.Equal(t, 15, int(took))
+	assert.Equal(t, 0, int(delay))
 	assert.Equal(t, 0, int(limiter.GetBucketSize()))
 
 	limiter.Add(100)
