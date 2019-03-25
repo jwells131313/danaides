@@ -132,6 +132,52 @@ func TestTwoAndAHalfSeconds(t *testing.T) {
 	assert.True(t, elapsed >= (2*time.Second))
 }
 
+func TestRateOfOne(t *testing.T) {
+	testLowRate(t, 1)
+}
+
+func TestRateOfZero(t *testing.T) {
+	// zero should be the same as 1
+	testLowRate(t, 0)
+}
+
+func testLowRate(t *testing.T, rate uint64) {
+	mc := &mockClock{}
+	now := time.Now()
+	mc.nextNow = now
+
+	limiter := New(rate, WithClock(mc))
+
+	limiter.Add(10)
+
+	count := 0
+	for {
+		count++
+
+		took, delay := limiter.Take()
+		if delay != 0 {
+			// faux sleep
+			mc.nextNow = mc.nextNow.Add(delay)
+			continue
+		}
+
+		// delay is zero
+		if took == 0 {
+			// All ten are gone
+			break
+		}
+
+		assert.Equal(t, 1, int(took))
+	}
+
+	assert.Equal(t, 20, count)
+
+	// should have slept nine seconds
+	expectedWaitTime := now.Add(9 * time.Second)
+
+	assert.Equal(t, expectedWaitTime, mc.nextNow)
+}
+
 type mockClock struct {
 	nextNow time.Time
 }

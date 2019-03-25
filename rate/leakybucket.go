@@ -56,6 +56,10 @@ type Option func(l *limiterData)
 // if limit is zero it will be set to 1, since a limit
 // of zero would never do anything
 func New(limit uint64, opts ...Option) Limiter {
+	if limit == 0 {
+		limit = 1
+	}
+
 	limitAsFloat := float64(limit)
 
 	retVal := &limiterData{
