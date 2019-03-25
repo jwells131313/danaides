@@ -18,11 +18,11 @@ type Limiter interface {
 	// Add adds the given number of elements to the stream managed by this limiter
 	Add(chunkSize uint64)
 
-	// Take removes bytes from the limiter in order to attempt to get
-	// as close to the limit as it can.  It returns the number of
-	// elements that can be processed at this time.  If it returns 0
-	// it will return the time the caller should wait before trying to
-	// take more again.  If both the number of elements and the duration
+	// Take removes some number of elements from the limiter in order to
+	// attempt to get as close to the limit as it can.  It returns the
+	// number of elements that can be processed at this time.  If it returns
+	// 0 elements it may return the duration the caller should wait before
+	// trying to take more.  If both the number of elements and the duration
 	// return 0 then the limiter is empty
 	Take() (uint64, time.Duration)
 
