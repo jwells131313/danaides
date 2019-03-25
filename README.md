@@ -42,31 +42,40 @@ Leaky Bucket Rate Limiter algorithm for streaming use cases
 
 ## Streaming Leaky Bucket
 
-This implemantation of the leaky bucket algorithm is meant for streaming
-use case.  The Limiter is the bucket and it has a desired data flow rate.
-Chunks of data can be added to the bucket by number and the Limiter will
-stream numbers elements back to the user or tell the user how much time
-they need to wait before asking the limiter for more data.
+This implementation of the leaky bucket algorithm is meant for a streaming
+use case.
+
+The Limiter is the bucket and it has a desired data flow rate. Chunks of data
+can be added to the bucket by number and the Limiter will stream element data
+back to the user by telling them how many elements can be processed at this time
+or telling the user how much time they need to wait before asking the limiter for
+more data.
+
+This rate limiter must be called at least once a second to be able to approach
+the desired rate.
 
 Basic usage:
 
 ```
 limiter := New(100) // 100 per second
 
-limiter.Add(200)
-limiter.Add(50)
 
 for {
-  took, delay := limiter.Take()
-  if took == 0 && delay == 0 {
-    // The limiter is empty, break out and get more data
-    break
-  }
+    // Get data from the source
+    limiter.Add(200)
 
-  if took == 0 {
-    time.Sleep(delay)
-  } else {
-    // do whatever it is you are doing with took elements
-  }
+    for {
+        took, delay := limiter.Take()
+        if took == 0 && delay == 0 {
+            // The limiter is empty, break out and get more data
+            break
+        }
+
+        if took == 0 {
+            time.Sleep(delay)
+        } else {
+            // Give took elements to your sink
+        }
+    }
 }
 ```
