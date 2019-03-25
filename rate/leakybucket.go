@@ -55,6 +55,8 @@ type limiterData struct {
 	replies           *repliesList
 }
 
+// Option is an option for New that allows the limiter to
+// be configured
 type Option func(l *limiterData)
 
 // New creates a new Limiter with the given limit
@@ -82,6 +84,8 @@ func New(limit uint64, opts ...Option) Limiter {
 	return retVal
 }
 
+// WithClock is an option to new that allows a clock to
+// be used with the limiter, used for testing
 func WithClock(clock Clock) Option {
 	return func(l *limiterData) {
 		l.clock = clock
