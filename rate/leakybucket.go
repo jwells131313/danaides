@@ -46,25 +46,36 @@ type limiterData struct {
 	boostedLimit float64
 
 	currentBucketSize uint64
-	lastEvent         time.Time
+	lastEvent         *time.Time
 	replies           *repliesList
 }
 
-// New creates a new Limiter with the given limit
-func New(limit uint64) Limiter {
-	return NewWithClock(limit, &defaultClock{})
-}
+type Option func(l *limiterData)
 
-// NewWithClock is used for testing with a specialized clock
-func NewWithClock(limit uint64, clock Clock) Limiter {
+// New creates a new Limiter with the given limit
+// if limit is zero it will be set to 1, since a limit
+// of zero would never do anything
+func New(limit uint64, opts ...Option) Limiter {
 	limitAsFloat := float64(limit)
 
-	return &limiterData{
-		clock:        clock,
+	retVal := &limiterData{
+		clock:        &defaultClock{},
 		limit:        limit,
 		limitAsFloat: limitAsFloat,
 		boostedLimit: limitAsFloat * boostFactor,
 		replies:      &repliesList{},
+	}
+
+	for _, opt := range opts {
+		opt(retVal)
+	}
+
+	return retVal
+}
+
+func WithClock(clock Clock) Option {
+	return func(l *limiterData) {
+		l.clock = clock
 	}
 }
 
@@ -74,10 +85,6 @@ func (ld *limiterData) Add(chunkSize uint64) {
 
 	currentSize := ld.currentBucketSize
 	ld.currentBucketSize = currentSize + chunkSize
-
-	if currentSize == 0 && ld.replies.cutAndIsEmpty(ld.clock.Now()) {
-		ld.lastEvent = ld.clock.Now()
-	}
 }
 
 func (ld *limiterData) Take() (uint64, time.Duration) {
@@ -91,10 +98,15 @@ func (ld *limiterData) Take() (uint64, time.Duration) {
 
 	now := ld.clock.Now()
 	defer func() {
-		ld.lastEvent = now
+		ld.lastEvent = &now
 	}()
 
-	sinceLastEvent := now.Sub(ld.lastEvent)
+	var sinceLastEvent time.Duration
+	if ld.lastEvent == nil {
+		sinceLastEvent = time.Second
+	} else {
+		sinceLastEvent = now.Sub(*ld.lastEvent)
+	}
 
 	var maxOutput float64
 	if sinceLastEvent < time.Second {
@@ -157,16 +169,6 @@ func (ld *limiterData) GetBucketSize() uint64 {
 type repliesList struct {
 	head *repliesEntry
 	tail *repliesEntry
-}
-
-func (rl *repliesList) cutAndIsEmpty(now time.Time) bool {
-	rl.calculateAndCut(now)
-
-	if rl.head == nil {
-		return true
-	}
-
-	return false
 }
 
 func (rl *repliesList) add(output uint64, now time.Time) {

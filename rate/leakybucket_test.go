@@ -12,7 +12,7 @@ func TestFundedTakesLongInitialWait(t *testing.T) {
 	mc := &mockClock{}
 	mc.nextNow = time.Now()
 
-	limiter := NewWithClock(100, mc)
+	limiter := New(100, WithClock(mc))
 
 	// should add 1000 to the bucket
 	limiter.Add(1000)
@@ -41,18 +41,25 @@ func TestTenTakes(t *testing.T) {
 	mc := &mockClock{}
 	mc.nextNow = time.Now()
 
-	limiter := NewWithClock(100, mc)
+	limiter := New(100, WithClock(mc))
 
 	// should add 1000 to the bucket
+	limiter.Add(15)
+	took, delay := limiter.Take()
+
+	// primes the pump by immediately taking the values back, does not increment clock
+	assert.Equal(t, 15, int(took))
+	assert.Equal(t, 0, int(limiter.GetBucketSize()))
+
 	limiter.Add(100)
 
-	// 9 runs gets rid of 99 bytes
-	for lcv := 0; lcv < 9; lcv++ {
+	// 7 runs gets rid of 77 bytes
+	for lcv := 0; lcv < 7; lcv++ {
 		mc.nextNow = mc.nextNow.Add(100 * time.Millisecond)
 
-		took, delay := limiter.Take()
+		took, delay = limiter.Take()
 
-		assert.Equal(t, uint64(11), took)
+		assert.Equal(t, 11, int(took))
 		assert.Equal(t, 100-(11*(lcv+1)), int(limiter.GetBucketSize()))
 		assert.Equal(t, time.Duration(0), delay)
 	}
@@ -60,17 +67,38 @@ func TestTenTakes(t *testing.T) {
 	// wait one tenth of a second
 	mc.nextNow = mc.nextNow.Add(100 * time.Millisecond)
 
-	took, delay := limiter.Take()
-
-	assert.Equal(t, uint64(1), took)
-	assert.Equal(t, uint64(0), limiter.GetBucketSize())
-	assert.Equal(t, time.Duration(0), delay)
-
-	// should not be able to take as we've already parcelled out the 100 for this second
 	took, delay = limiter.Take()
 
-	assert.Equal(t, uint64(0), took)
-	assert.Equal(t, uint64(0), limiter.GetBucketSize())
+	assert.Equal(t, 8, int(took))
+	assert.Equal(t, 15, int(limiter.GetBucketSize()))
+	assert.Equal(t, time.Duration(0), delay)
+
+	// wait one tenth of a second
+	mc.nextNow = mc.nextNow.Add(100 * time.Millisecond)
+
+	took, delay = limiter.Take()
+
+	assert.Equal(t, 0, int(took))
+	assert.Equal(t, 15, int(limiter.GetBucketSize()))
+	assert.Equal(t, 100*time.Millisecond, delay)
+
+	// now waiting 2 * 1/10 of a second to clear enough space to get the rest
+	mc.nextNow = mc.nextNow.Add(200 * time.Millisecond)
+
+	// should now be able to take the last few bytes
+	took, delay = limiter.Take()
+
+	assert.Equal(t, 15, int(took))
+	assert.Equal(t, 0, int(limiter.GetBucketSize()))
+	assert.Equal(t, time.Duration(0), delay)
+
+	// one more 1/10 and take again but there should be nothing left
+	mc.nextNow = mc.nextNow.Add(100 * time.Millisecond)
+
+	took, delay = limiter.Take()
+
+	assert.Equal(t, 0, int(took))
+	assert.Equal(t, 0, int(limiter.GetBucketSize()))
 	assert.Equal(t, time.Duration(0), delay)
 }
 
