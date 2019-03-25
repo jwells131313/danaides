@@ -36,7 +36,7 @@
 [//]: # " only if the new code is made subject to such option by the copyright "
 [//]: # " holder. "
 
-# danaides [![GoDoc](https://godoc.org/github.com/jwells131313/danaides/rate?status.svg)](https://godoc.org/github.com/jwells131313/danaides/rate) [![wercker status](https://app.wercker.com/status/3af761a000be024abb16aaf7a7fc8a74/s/master "wercker status")](https://app.wercker.com/project/byKey/3af761a000be024abb16aaf7a7fc8a74)
+# danaides [![GoDoc](https://godoc.org/github.com/jwells131313/danaides/rate?status.svg)](https://godoc.org/github.com/jwells131313/danaides/rate) [![wercker status](https://app.wercker.com/status/3af761a000be024abb16aaf7a7fc8a74/s/master "wercker status")](https://app.wercker.com/project/byKey/3af761a000be024abb16aaf7a7fc8a74) [![Go Report Card](https://goreportcard.com/badge/github.com/jwells131313/danaides)](https://goreportcard.com/report/github.com/jwells131313/danaides)
 
 Leaky Bucket Rate Limiter algorithm for streaming use cases
 
