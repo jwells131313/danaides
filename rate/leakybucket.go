@@ -29,6 +29,11 @@ type Limiter interface {
 	// items per second
 	GetLimit() uint64
 
+	// Sets a new limit and returns the old limit.  Not that a limit
+	// of 0 is converted to a limit of one.  Value is in elements
+	// per second
+	SetLimit(uint64) uint64
+
 	// GetBucketSize returns the current size of the bucket
 	GetBucketSize() uint64
 }
@@ -160,7 +165,26 @@ func (ld *limiterData) Take() (uint64, time.Duration) {
 }
 
 func (ld *limiterData) GetLimit() uint64 {
+	ld.lock.Lock()
+	defer ld.lock.Unlock()
+
 	return ld.limit
+}
+
+func (ld *limiterData) SetLimit(nLimit uint64) uint64 {
+	ld.lock.Lock()
+	defer ld.lock.Unlock()
+
+	if nLimit == 0 {
+		nLimit = 1
+	}
+
+	retVal := ld.limit
+	ld.limit = nLimit
+	ld.limitAsFloat = float64(nLimit)
+	ld.boostedLimit = float64(nLimit) * boostFactor
+
+	return retVal
 }
 
 func (ld *limiterData) GetBucketSize() uint64 {

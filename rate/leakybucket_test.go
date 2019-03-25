@@ -181,6 +181,46 @@ func testLowRate(t *testing.T, rate uint64) {
 	assert.Equal(t, expectedWaitTime, mc.nextNow)
 }
 
+func TestChangeLimit(t *testing.T) {
+	mc := &mockClock{}
+	mc.nextNow = time.Now()
+
+	limiter := New(100, WithClock(mc))
+
+	assert.Equal(t, int(100), int(limiter.GetLimit()))
+
+	limiter.Add(1000)
+
+	mc.nextNow = mc.nextNow.Add(time.Second)
+
+	took, delay := limiter.Take()
+	assert.Equal(t, 100, int(took))
+	assert.Equal(t, 0, int(delay))
+
+	old := limiter.SetLimit(50)
+	assert.Equal(t, 100, int(old))
+	assert.Equal(t, 50, int(limiter.GetLimit()))
+
+	mc.nextNow = mc.nextNow.Add(time.Second)
+
+	// should only be able to get 50 now
+	took, delay = limiter.Take()
+	assert.Equal(t, 50, int(took))
+	assert.Equal(t, 0, int(delay))
+
+	// now move limit up and be sure we can get it in next took call
+	old = limiter.SetLimit(200)
+	assert.Equal(t, 50, int(old))
+	assert.Equal(t, 200, int(limiter.GetLimit()))
+
+	// The 50 from before will still be in the window
+	mc.nextNow = mc.nextNow.Add(time.Second - 1)
+
+	took, delay = limiter.Take()
+	assert.Equal(t, 150, int(took))
+	assert.Equal(t, 0, int(delay))
+}
+
 type mockClock struct {
 	nextNow time.Time
 }
