@@ -14,24 +14,23 @@ const (
 
 // Limiter is used to limit a stream of items to a specific rate
 type Limiter interface {
-	// Add Adds a chunk of data to the stream managed by this limiter
+	// Add adds the given number of elements to the stream managed by this limiter
 	Add(chunkSize uint64)
 
 	// Take removes bytes from the limiter in order to attempt to get
 	// as close to the limit as it can.  It returns the number of
-	// elements that can be processed at this time.  Will return 0 if
-	// the bucket is empty.  If it returns 0 it may return the time the
-	// caller should wait before trying to take more again.  If both
-	// the number and the duration return 0 then the limiter is empty
+	// elements that can be processed at this time.  If it returns 0
+	// it will return the time the caller should wait before trying to
+	// take more again.  If both the number of elements and the duration
+	// return 0 then the limiter is empty
 	Take() (uint64, time.Duration)
 
 	// Returns the limit this limiter will attempt to achieve in
-	// items per second
+	// elements per second
 	GetLimit() uint64
 
-	// Sets a new limit and returns the old limit.  Not that a limit
-	// of 0 is converted to a limit of one.  Value is in elements
-	// per second
+	// Sets a new limit in elements per second and returns the old limit.
+	// Note that a limit of 0 is converted to a limit of 1
 	SetLimit(uint64) uint64
 
 	// GetBucketSize returns the current size of the bucket
@@ -59,9 +58,8 @@ type limiterData struct {
 // be configured
 type Option func(l *limiterData)
 
-// New creates a new Limiter with the given limit
-// if limit is zero it will be set to 1, since a limit
-// of zero would never do anything
+// New creates a new Limiter with the limit in elements
+// per second.  If limit is 0 it will be set to 1
 func New(limit uint64, opts ...Option) Limiter {
 	if limit == 0 {
 		limit = 1
