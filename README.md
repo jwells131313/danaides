@@ -1,6 +1,6 @@
 [//]: # " DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER. "
 [//]: # "  "
-[//]: # " Copyright (c) 2019 Oracle and/or its affiliates. All rights reserved. "
+[//]: # " Copyright (c) 2019-2023 Oracle and/or its affiliates. All rights reserved. "
 [//]: # "  "
 [//]: # " The contents of this file are subject to the terms of either the GNU "
 [//]: # " General Public License Version 2 only (''GPL'') or the Common Development "
@@ -36,7 +36,7 @@
 [//]: # " only if the new code is made subject to such option by the copyright "
 [//]: # " holder. "
 
-# danaides [![GoDoc](https://godoc.org/github.com/jwells131313/danaides/rate?status.svg)](https://godoc.org/github.com/jwells131313/danaides/rate) [![wercker status](https://app.wercker.com/status/3af761a000be024abb16aaf7a7fc8a74/s/master "wercker status")](https://app.wercker.com/project/byKey/3af761a000be024abb16aaf7a7fc8a74) [![Go Report Card](https://goreportcard.com/badge/github.com/jwells131313/danaides)](https://goreportcard.com/report/github.com/jwells131313/danaides)
+# danaides [![GoDoc](https://godoc.org/github.com/jwells131313/danaides/rate?status.svg)](https://godoc.org/github.com/jwells131313/danaides/rate) [![Go Report Card](https://goreportcard.com/badge/github.com/jwells131313/danaides)](https://goreportcard.com/report/github.com/jwells131313/danaides)
 
 Leaky Bucket Rate Limiter algorithm for streaming use cases
 
