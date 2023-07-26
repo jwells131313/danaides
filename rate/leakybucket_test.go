@@ -222,6 +222,187 @@ func TestChangeLimit(t *testing.T) {
 	assert.Equal(t, 0, int(delay))
 }
 
+func TestBlockLimitBasic(t *testing.T) {
+	mc := &mockClock{}
+	mc.nextNow = time.Now()
+
+	limiter := New(100, WithClock(mc), TakeByBlock())
+
+	limiter.Add(200)
+	limiter.Add(10)
+
+	numTaken, waitDuration := limiter.Take()
+	assert.Equal(t, uint64(200), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(time.Second / 2) // add a half second and call again, should not be enough time
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, 1*time.Second+time.Second/2, waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(waitDuration) // this should get us over the expected wait time
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(10), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(time.Second / 4) // another quarter second for veracity
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+}
+
+func TestBlockLimitMultipleTakesInOneSecond(t *testing.T) {
+	mc := &mockClock{}
+	mc.nextNow = time.Now()
+
+	limiter := New(100, WithClock(mc), TakeByBlock())
+
+	limiter.Add(10)
+	limiter.Add(10)
+	limiter.Add(10)
+	limiter.Add(71) // a total of 101
+	limiter.Add(10) // one past
+
+	numTaken, waitDuration := limiter.Take()
+	assert.Equal(t, uint64(10), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(1)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(10), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(1)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(10), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(1)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(71), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(1)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(1009999996), waitDuration) // 1.01 seconds minus 4 nanoseconds
+
+	mc.nextNow = mc.nextNow.Add(waitDuration)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(10), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(time.Second)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+}
+
+func TestBlockLimitMultipleTakesInterlevedAdds(t *testing.T) {
+	mc := &mockClock{}
+	mc.nextNow = time.Now()
+
+	limiter := New(100, WithClock(mc), TakeByBlock())
+
+	limiter.Add(10)
+
+	numTaken, waitDuration := limiter.Take()
+	assert.Equal(t, uint64(10), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(1)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	limiter.Add(10)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(10), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(1)
+
+	limiter.Add(81)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(81), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(100)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(1009999898), waitDuration)
+
+	limiter.Add(100)
+
+	mc.nextNow = mc.nextNow.Add(time.Second)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(9999898), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(waitDuration)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(100), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(1)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+}
+
+func TestBlockLimitMultipleLargeInitialAdd(t *testing.T) {
+	mc := &mockClock{}
+	mc.nextNow = time.Now()
+
+	limiter := New(100, WithClock(mc), TakeByBlock())
+
+	limiter.Add(1000)
+
+	numTaken, waitDuration := limiter.Take()
+	assert.Equal(t, uint64(1000), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(time.Second)
+
+	limiter.Add(1)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, 9*time.Second, waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(waitDuration)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(1), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+
+	mc.nextNow = mc.nextNow.Add(1)
+
+	numTaken, waitDuration = limiter.Take()
+	assert.Equal(t, uint64(0), numTaken)
+	assert.Equal(t, time.Duration(0), waitDuration)
+}
+
 type mockClock struct {
 	nextNow time.Time
 }
